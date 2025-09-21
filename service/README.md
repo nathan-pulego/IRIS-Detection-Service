@@ -6,7 +6,7 @@ This project is the backend service for a real-time drowsiness detection system.
 ## Features
 - **Bluetooth Data Collection:** Gathers raw sensor data from a connected device.
 - **Data Cleansing:** Handles missing values and normalizes data for consistent processing.
-- **Feature Extraction:** Extracts key metrics such as blink duration, blink frequency, and average head movement.
+- **Feature Extraction:** Extracts key metrics such as blink duration, count of head nods about gz, and acceleration of ax.
 - **Drowsiness Algorithm:** Processes extracted features to detect drowsiness in real-time.
 - **RESTful API:** Provides endpoints for the frontend application to interact with the backend services.
 - **Unit Testing:** Includes a dedicated testing suite for each service to ensure reliability.

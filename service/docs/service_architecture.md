@@ -21,9 +21,9 @@ The backend architecture is a modular, pipeline-based system designed to process
 ### 3. Feature Extraction Service (`src/feature_extraction`)
 - **Function:** Analyzes the cleaned data to extract meaningful, high-level features that are indicative of drowsiness. Converts raw sensor readings into quantifiable metrics.
 - **Key Features Extracted:**
-  - Blink Duration: Calculates how long a specific sensor value (e.g., a signal indicating eye closure) remains in a low or high state.
-  - Average Head Movement Acceleration: Determines the average acceleration of the user's head over a defined period.
-  - Blink Frequency: Measures the number of blinks within a set duration.
+  - AVERAGE blink duration of a particular window (ms): Calculates the average duration of eye closures over a defined time period, measured in milliseconds.
+  - AVERAGE acceleration about ay (nodding acceleration): Determines the average vertical acceleration of the user's head over a defined period to detect nodding behavior.
+  - Nodding frequency (measured as gyroscope about the gz axis): Measures the rate of nodding over a set duration by analyzing the rotational data from the gyroscope's Z-axis.
 - **Data Output:** A feature vector containing the calculated metrics.
 
 ### 4. Drowsiness Algorithm Service (`src/algorithm`)
