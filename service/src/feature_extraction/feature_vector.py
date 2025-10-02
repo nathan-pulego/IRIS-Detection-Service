@@ -76,6 +76,13 @@ class FeatureExtractor:
 
 # Example usage with mock data
 if __name__ == '__main__':
+
+    # Set pandas options to display the full DataFrame
+    pd.set_option('display.max_rows', None)
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.width', None)
+    pd.set_option('display.max_colwidth', None)
+    
     # Create a mock DataFrame representing a 10-second data window
     sample_rate = 100
     mock_data = pd.DataFrame({
@@ -98,7 +105,7 @@ if __name__ == '__main__':
     avg_blink = extractor.getBlinkScalar(mock_data)
     nod_freq = extractor.getNodFreqScalar(mock_data)
     avg_accel = extractor.getAvgAccelScalar(mock_data)
-
+    print(mock_data)
     print(f"Average Blink Duration: {avg_blink:.2f} ms")
     print(f"Nodding Frequency: {nod_freq:.2f} Hz")
     print(f"Average Acceleration (ay): {avg_accel:.2f}")
