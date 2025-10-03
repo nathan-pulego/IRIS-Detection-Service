@@ -1,6 +1,6 @@
 import asyncio
 from ble_handler import BLEHandler
-from data_processor import DataProcessor
+from service.src.data_cleansing.data_processor import DataProcessor
 
 async def main():
     """Coordinate BLE handling, data processing, and feature extraction."""

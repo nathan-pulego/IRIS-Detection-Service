@@ -16,7 +16,7 @@ class BLEHandler:
                 devices = await BleakScanner.discover()
                 device = next((d for d in devices if d.name == DEVICE_NAME), None)
                 if not device:
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(2)
                     continue
 
                 self.client = BleakClient(device.address)
