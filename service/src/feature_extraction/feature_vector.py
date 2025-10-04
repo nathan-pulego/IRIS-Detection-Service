@@ -7,7 +7,7 @@ class FeatureExtractor:
     """
     Extracts key features from a pandas DataFrame of time-series sensor data.
     """
-    def __init__(self, sample_rate, blink_threshold=1000, nod_threshold=0.5):
+    def __init__(self, sample_rate, blink_threshold, nod_threshold):
         self.sample_rate = sample_rate
         self.blink_threshold = blink_threshold
         self.nod_threshold = nod_threshold
@@ -92,20 +92,24 @@ if __name__ == '__main__':
     })
 
     # Simulate blinks (drops in photodiode value)
-    mock_data.loc[100:105, 'photodiode_value'] = np.random.randint(50, 150, 6)
-    mock_data.loc[500:510, 'photodiode_value'] = np.random.randint(50, 150, 11)
+    # mock_data.loc[100:105, 'photodiode_value'] = np.random.randint(50, 150, 6)
+    # mock_data.loc[500:510, 'photodiode_value'] = np.random.randint(50, 150, 11)
 
-    # Simulate a nodding movement (spikes in gz and ay values)
-    # The amplitude of 5 is well above the nod_threshold of 0.5
-    mock_data.loc[250:270, 'gz'] = np.sin(np.linspace(0, np.pi * 5, 21)) * 5
-    mock_data.loc[250:270, 'ay'] = np.sin(np.linspace(0, np.pi * 5, 21)) * 0.8
+    # # Simulate a nodding movement (spikes in gz and ay values)
+    # # The amplitude of 5 is well above the nod_threshold of 0.5
+    # mock_data.loc[250:270, 'gz'] = np.sin(np.linspace(0, np.pi * 5, 21)) * 5
+    # mock_data.loc[250:270, 'ay'] = np.sin(np.linspace(0, np.pi * 5, 21)) * 0.8
     
-    extractor = FeatureExtractor(sample_rate=sample_rate)
-    
-    avg_blink = extractor.getBlinkScalar(mock_data)
-    nod_freq = extractor.getNodFreqScalar(mock_data)
-    avg_accel = extractor.getAvgAccelScalar(mock_data)
-    print(mock_data)
-    print(f"Average Blink Duration: {avg_blink:.2f} ms")
-    print(f"Nodding Frequency: {nod_freq:.2f} Hz")
-    print(f"Average Acceleration (ay): {avg_accel:.2f}")
+    # extractor = FeatureExtractor(
+    #     sample_rate=sample_rate,
+    #     blink_threshold=1000,
+    #     nod_threshold=0.5
+    # )
+
+    # avg_blink = extractor.getBlinkScalar(mock_data)
+    # nod_freq = extractor.getNodFreqScalar(mock_data)
+    # avg_accel = extractor.getAvgAccelScalar(mock_data)
+    # print(mock_data)
+    # print(f"Average Blink Duration: {avg_blink:.2f} ms")
+    # print(f"Nodding Frequency: {nod_freq:.2f} Hz")
+    # print(f"Average Acceleration (ay): {avg_accel:.2f}")

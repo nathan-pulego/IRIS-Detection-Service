@@ -2,20 +2,18 @@ import asyncio
 import pandas as pd
 import io
 from typing import List, Dict
-
-FRAME_SIZE = 1000  # Rows per frame
+from config import FRAME_SIZE  # Number of rows per frame
 
 class DataProcessor:
     def __init__(self, queue: asyncio.Queue):
         self.queue = queue
         self.buffer: List[Dict] = []  # Accumulate rows
 
-    def process_data(self, data: bytearray):
-        """Deserialize and cleanse data, then queue frames."""
+    def process_data(self, data: str):
+        """Parse str into DataFrame, buffer rows, and queue complete frames"""
         try:
-            # Decode and parse CSV string to DataFrame
-            csv_string = data.decode('utf-8')
-            df_chunk = pd.read_csv(io.StringIO(csv_string), header=0 if not self.buffer else None)
+            # Parse CSV string to DataFrame
+            df_chunk = pd.read_csv(io.StringIO(data), header=0 if not self.buffer else None)
             
             # Basic cleansing: Drop rows with NaN or invalid values (customize as needed)
             df_chunk = df_chunk.dropna()
@@ -36,23 +34,3 @@ class DataProcessor:
         """Queue the DataFrame frame."""
         await self.queue.put(frame_df)
 
-# Example integration
-async def example():
-    queue = asyncio.Queue()
-    processor = DataProcessor(queue)
-    
-    # Simulate BLE handler callback
-    def mock_callback(data):
-        processor.process_data(data)
-    
-    # Mock data (replace with real BLE)
-    mock_data = b"photodiode_value,ay,gz\n1000,0.1,0.0\n999,0.2,0.1\n"
-    mock_callback(mock_data)
-    
-    # Consume
-    frame = await queue.get()
-    print(f"Processed frame: {frame.shape}")
-    # Integrate with FeatureExtractor here
-
-if __name__ == "__main__":
-    asyncio.run(example())

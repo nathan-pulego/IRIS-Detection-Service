@@ -4,8 +4,8 @@ from typing import Optional, Callable
 from config import DEVICE_NAME, TX_CHAR_UUID
 
 class BLEHandler:
-    def __init__(self, data_callback: Callable[[bytearray], None]):
-        self.data_callback = data_callback  # Callback to pass raw data to processor
+    def __init__(self, data_callback: Callable[[str], None]):  # Updated to expect str
+        self.data_callback = data_callback  # Callback to pass decoded string data to processor
         self.client: Optional[BleakClient] = None
 
     async def connect_and_subscribe(self):
@@ -27,7 +27,7 @@ class BLEHandler:
 
                 # Keep alive by polling connection status
                 while self.client.is_connected:
-                    await asyncio.sleep(1)  # Check every second
+                    await asyncio.sleep(5)  # Check every second
             except Exception as e:
                 await asyncio.sleep(5)
             finally:
@@ -35,5 +35,6 @@ class BLEHandler:
                     await self.client.disconnect()
 
     def _handle_tx_data(self, sender, data: bytearray):
-        """Pass raw data to the processor callback."""
-        self.data_callback(data)
+        # Decode the bytearray to string before passing to callback
+        decoded_data = data.decode('utf-8', errors='ignore')
+        self.data_callback(decoded_data)
