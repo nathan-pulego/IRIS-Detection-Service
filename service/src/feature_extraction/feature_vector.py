@@ -7,7 +7,7 @@ class FeatureExtractor:
     """
     Extracts key features from a pandas DataFrame of time-series sensor data.
     """
-    def __init__(self, sample_rate, blink_threshold, nod_threshold):
+    def __init__(self, sample_rate=100, blink_threshold=1000, nod_threshold=1.1):
         self.sample_rate = sample_rate
         self.blink_threshold = blink_threshold
         self.nod_threshold = nod_threshold
@@ -100,12 +100,8 @@ if __name__ == '__main__':
     # mock_data.loc[250:270, 'gz'] = np.sin(np.linspace(0, np.pi * 5, 21)) * 5
     # mock_data.loc[250:270, 'ay'] = np.sin(np.linspace(0, np.pi * 5, 21)) * 0.8
     
-    # extractor = FeatureExtractor(
-    #     sample_rate=sample_rate,
-    #     blink_threshold=1000,
-    #     nod_threshold=0.5
-    # )
-
+    # extractor = FeatureExtractor(sample_rate=sample_rate)
+    
     # avg_blink = extractor.getBlinkScalar(mock_data)
     # nod_freq = extractor.getNodFreqScalar(mock_data)
     # avg_accel = extractor.getAvgAccelScalar(mock_data)
