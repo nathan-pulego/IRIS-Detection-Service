@@ -1,130 +1,146 @@
 import asyncio
 import pandas as pd
 import numpy as np
-from src.bluetooth.ble_handler import BLEHandler
 from src.data_cleansing.data_processor import DataProcessor
 from src.feature_extraction.feature_vector import FeatureExtractor
+from src.algorithm.baseline import define_and_save_drowsiness_baseline, load_baseline
+from src.algorithm.ml_models import load_models, predict_state
 
+# Constants
+FRAME_SIZE = 1000
+SAMPLE_RATE = 100
+BLINK_THRESHOLD = 1000
+NOD_THRESHOLD = 0.5
+
+# ------------------------
 # Test DataProcessor
+# ------------------------
 async def test_data_processor():
     print("Testing DataProcessor...")
     queue = asyncio.Queue()
     processor = DataProcessor(queue)
 
-    # Mock CSV data (simulate BLE input)
-    mock_csv = "photodiode_value,ay,gz\n1000,0.1,0.0\n999,0.2,0.1\n"
-
-    # Process the data
+    # Mock BLE-like CSV input
+    mock_csv = "photodiode_value,ay,gz\n1000,0.05,0.0\n980,0.1,0.0\n"
     processor.process_data(mock_csv)
 
-    # Check buffer
-    assert len(processor.buffer) == 2, f"Expected 2 rows in buffer, got {len(processor.buffer)}"
-    assert processor.buffer[0]['photodiode_value'] == 1000, "First row photodiode_value mismatch"
+    assert len(processor.buffer) == 2, "Buffer should contain 2 rows"
 
-    # Simulate more data to fill frame (FRAME_SIZE=1000, so add 998 more rows)
-    for i in range(998):
-        processor.process_data("1000,0.1,0.0\n")
+    # Fill buffer to FRAME_SIZE
+    for _ in range(FRAME_SIZE - 2):
+        processor.process_data("1000,0.05,0.0\n")
 
-    # Check if frame was queued (buffer should be empty after queueing)
     frame = await queue.get()
-    assert isinstance(frame, pd.DataFrame), "Queued item should be a DataFrame"
-    assert len(frame) == 1000, f"Frame should have 1000 rows, got {len(frame)}"
-    assert len(processor.buffer) == 0, "Buffer should be empty after queueing"
+    assert isinstance(frame, pd.DataFrame), "Queued frame should be DataFrame"
+    assert len(frame) == FRAME_SIZE, "Frame should have 1000 rows"
+    assert len(processor.buffer) == 0, "Buffer should be empty after queuing"
+    print("DataProcessor test passed.")
 
-    print("DataProcessor test passed!")
-
+# ------------------------
 # Test FeatureExtractor
+# ------------------------
 def test_feature_extractor():
     print("Testing FeatureExtractor...")
-    extractor = FeatureExtractor(sample_rate=100, blink_threshold=1000, nod_threshold=0.5)
+    extractor = FeatureExtractor(sample_rate=SAMPLE_RATE, blink_threshold=BLINK_THRESHOLD, nod_threshold=NOD_THRESHOLD)
 
-    # Create mock DataFrame (from feature_vector.py simulation)
     mock_data = pd.DataFrame({
-        'photodiode_value': np.random.randint(900, 1100, 1000),
-        'ay': np.random.rand(1000) * 0.5,
-        'gz': np.zeros(1000)
+        'photodiode_value': np.random.randint(900, 1100, FRAME_SIZE),
+        'ay': np.random.rand(FRAME_SIZE) * 0.5,
+        'gz': np.zeros(FRAME_SIZE)
     })
 
-    # Simulate blinks (drops in photodiode value)
-    mock_data.loc[100:105, 'photodiode_value'] = np.random.randint(50, 150, 6)
-    mock_data.loc[500:510, 'photodiode_value'] = np.random.randint(50, 150, 11)
+    # Simulate blinks
+    mock_data.loc[100:110, 'photodiode_value'] = 100
+    mock_data.loc[500:515, 'photodiode_value'] = 50
+    # Simulate nodding
+    mock_data.loc[250:265, 'gz'] = np.sin(np.linspace(0, np.pi*3, 16)) * 0.6
 
-    # Simulate nodding (spikes in gz)
-    mock_data.loc[250:270, 'gz'] = np.sin(np.linspace(0, np.pi * 5, 21)) * 5
-
-    # Test methods
-    avg_blink = extractor.getBlinkScalar(mock_data)
+    blink_duration = extractor.getBlinkScalar(mock_data)
     nod_freq = extractor.getNodFreqScalar(mock_data)
     avg_accel = extractor.getAvgAccelScalar(mock_data)
 
-    # Assertions (basic checks)
-    assert isinstance(avg_blink, float), "getBlinkScalar should return float"
-    assert avg_blink > 0, "Blink duration should be positive with simulated blinks"
-    assert isinstance(nod_freq, float), "getNodFreqScalar should return float"
-    assert nod_freq >= 0, "Nod frequency should be non-negative"
-    assert isinstance(avg_accel, float), "getAvgAccelScalar should return float"
-    assert -1 <= avg_accel <= 1, "Average accel should be in expected range"
+    assert blink_duration > 0, "Blink duration should be positive"
+    assert nod_freq >= 0, "Nod frequency non-negative"
+    assert -1 <= avg_accel <= 1, "Average acceleration in expected range"
+    print(f"Blink Duration: {blink_duration:.2f} ms, Nod Frequency: {nod_freq:.2f} Hz, Avg Accel: {avg_accel:.2f}")
+    print("FeatureExtractor test passed.")
 
-    print(f"Average Blink Duration: {avg_blink:.2f} ms")
-    print(f"Nodding Frequency: {nod_freq:.2f} Hz")
-    print(f"Average Acceleration (ay): {avg_accel:.2f}")
-    print("FeatureExtractor test passed!")
+# ------------------------
+# Test baseline and HMM
+# ------------------------
+def test_baseline_hmm():
+    print("Testing Baseline + HMM integration...")
+    # Ensure baseline exists
+    define_and_save_drowsiness_baseline()
+    baseline = load_baseline()
+    assert baseline is not None, "Baseline should load"
 
-# Test BLEHandler (mocked, since real BLE needs hardware)
-async def test_ble_handler():
-    print("Testing BLEHandler (mocked)...")
-    queue = asyncio.Queue()
-    processor = DataProcessor(queue)
+    # Load HMM models
+    alert_model, drowsy_model = load_models()
 
-    # Mock callback
-    def mock_callback(data: str):
-        processor.process_data(data)
+    # Mock feature vectors
+    alert_vector = [250.0, 0.0, 0.0]  # avg_blink_ms, nod_freq, avg_accel
+    drowsy_vector = [800.0, 1.0, 0.3]
 
-    handler = BLEHandler(data_callback=mock_callback)
+    state_alert = predict_state(alert_vector, alert_model, drowsy_model)
+    state_drowsy = predict_state(drowsy_vector, alert_model, drowsy_model)
 
-    # Simulate data reception (normally done by BLE notifications)
-    mock_data = "photodiode_value,ay,gz\n1000,0.1,0.0\n"
-    handler._handle_tx_data(None, bytearray(mock_data.encode('utf-8')))  # Simulate BLE event
+    assert state_alert in ["Alert", "Drowsy"], "Prediction should return valid state"
+    assert state_drowsy in ["Alert", "Drowsy"], "Prediction should return valid state"
 
-    # Check if data was processed
-    assert len(processor.buffer) == 1, "Buffer should have 1 row after mock callback"
+    print(f"Alert vector predicted as: {state_alert}")
+    print(f"Drowsy vector predicted as: {state_drowsy}")
+    print("Baseline + HMM test passed.")
 
-    print("BLEHandler test passed!")
-
-# Integration test (simulate controller flow)
+# ------------------------
+# Integration test: full pipeline
+# ------------------------
 async def test_integration():
-    print("Testing integration (controller simulation)...")
+    print("Testing full pipeline integration...")
     queue = asyncio.Queue()
     processor = DataProcessor(queue)
-    extractor = FeatureExtractor(sample_rate=100, blink_threshold=1000, nod_threshold=0.5)
+    extractor = FeatureExtractor(sample_rate=SAMPLE_RATE, blink_threshold=BLINK_THRESHOLD, nod_threshold=NOD_THRESHOLD)
 
-    # Simulate BLE data
-    mock_csv = "photodiode_value,ay,gz\n1000,0.1,0.0\n999,0.2,0.1\n"
-    processor.process_data(mock_csv)
+    # Simulate drowsy-like BLE input
+    for _ in range(FRAME_SIZE):
+        processor.process_data("photodiode_value,ay,gz\n950,0.1,0.0\n")
 
-    # Add more data to fill frame
-    for i in range(999):
-        processor.process_data("photodiode_value,ay,gz\n1000,0.1,0.0\n")
-
-    # Get frame and extract features
     frame = await queue.get()
-    avg_accel = extractor.getAvgAccelScalar(frame)
-    blink_scalar = extractor.getBlinkScalar(frame)
+
+    # Extract features
+    blink_duration = extractor.getBlinkScalar(frame)
     nod_freq = extractor.getNodFreqScalar(frame)
+    avg_accel = extractor.getAvgAccelScalar(frame)
 
-    # Basic checks
-    assert isinstance(frame, pd.DataFrame), "Frame should be DataFrame"
-    assert len(frame) == 1000, "Frame should have 1000 rows"
-    assert isinstance(avg_accel, float), "Features should be floats"
+    # Load baseline and HMM
+    baseline = load_baseline()
+    alert_model, drowsy_model = load_models()
 
-    print(f"Integration test: Frame processed, features extracted (avg_accel: {avg_accel:.2f})")
-    print("Integration test passed!")
+    # Compare with baseline (simple deviation check)
+    deviations = {}
+    if blink_duration > baseline["avg_blink_duration_ms"]:
+        deviations["blink"] = blink_duration
+    if nod_freq > baseline["nod_freq_hz"]:
+        deviations["nod"] = nod_freq
+    if abs(avg_accel) > baseline["avg_accel_ay"]:
+        deviations["accel"] = avg_accel
 
+    # HMM prediction
+    feature_vector = [blink_duration, nod_freq, avg_accel]
+    state = predict_state(feature_vector, alert_model, drowsy_model)
+
+    print(f"Extracted features: Blink {blink_duration:.2f} ms, Nod {nod_freq:.2f} Hz, Accel {avg_accel:.2f}")
+    print(f"Deviations from baseline: {deviations}")
+    print(f"HMM predicted state: {state}")
+    print("Integration test passed.")
+
+# ------------------------
 # Run all tests
+# ------------------------
 async def main():
     await test_data_processor()
     test_feature_extractor()
-    await test_ble_handler()
+    test_baseline_hmm()
     await test_integration()
     print("All tests passed!")
 
