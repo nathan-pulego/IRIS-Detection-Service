@@ -1,4 +1,6 @@
 numpy
-scipy
 pandas
+scipy
+hmmlearn
+joblib
 bleak
