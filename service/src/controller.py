@@ -7,6 +7,7 @@ from src.feature_extraction.feature_vector import FeatureExtractor
 from src.algorithm.baseline import load_baseline, define_and_save_drowsiness_baseline
 from src.algorithm.ml_models import load_models, predict_state
 from src.config import SAMPLE_RATE, BLINK_THRESHOLD, NOD_THRESHOLD, FRAME_SIZE
+from src.network.ws_server import WebSocketServer
 
 # Paths for session storage
 RAW_DIR = "./data/raw"
@@ -45,6 +46,16 @@ async def main():
 
     # Start BLE listener
     bluetooth_task = asyncio.create_task(handler.connect_and_subscribe())
+
+    # Start WebSocket server
+    ws_server = WebSocketServer()
+    asyncio.create_task(ws_server.start())
+
+    # Periodically broadcast state to dashboards
+    async def broadcast_state():
+        while True:
+            await ws_server.broadcast(state)
+            await asyncio.sleep(1)
 
     try:
         while True:
