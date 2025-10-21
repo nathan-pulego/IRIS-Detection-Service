@@ -28,7 +28,7 @@ class WebSocketServer:
         if not self.clients:
             return
         data = json.dumps(state, default=str)
-        await asyncio.gather(*[client.send(data) for client in self.clients])
+        await asyncio.gather(*[client.send(data) for client in self.clients], return_exceptions=True)
 
     async def start(self):
         """Starts the WebSocket server."""

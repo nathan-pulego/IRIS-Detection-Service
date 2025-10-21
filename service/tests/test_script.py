@@ -1,39 +1,37 @@
 import asyncio
 import pandas as pd
 import numpy as np
+import pytest
 from src.data_cleansing.data_processor import DataProcessor
 from src.feature_extraction.feature_vector import FeatureExtractor
 from src.algorithm.baseline import define_and_save_drowsiness_baseline, load_baseline
 from src.algorithm.ml_models import load_models, predict_state
+from src.config import FRAME_SIZE, SAMPLE_RATE, BLINK_THRESHOLD, NOD_THRESHOLD
 
-# Constants
-FRAME_SIZE = 1000
-SAMPLE_RATE = 100
-BLINK_THRESHOLD = 1000
-NOD_THRESHOLD = 0.5
-
+# Mark async tests individually to avoid marking sync tests as asyncio coroutines
 # ------------------------
 # Test DataProcessor
 # ------------------------
+@pytest.mark.asyncio
 async def test_data_processor():
     print("Testing DataProcessor...")
     queue = asyncio.Queue()
     processor = DataProcessor(queue)
 
-    # Mock BLE-like CSV input
-    mock_csv = "photodiode_value,ay,gz\n1000,0.05,0.0\n980,0.1,0.0\n"
-    processor.process_data(mock_csv)
+    # ✅ FIX: Send JSON dicts directly (matches actual BLE usage)
+    processor.process_data({"photodiode_value": 1000, "ay": 0.05, "gz": 0.0})
+    processor.process_data({"photodiode_value": 980, "ay": 0.1, "gz": 0.0})
 
-    assert len(processor.buffer) == 2, "Buffer should contain 2 rows"
+    assert len(processor.buffer) == 2, f"Buffer should contain 2 rows, got {len(processor.buffer)}"
 
     # Fill buffer to FRAME_SIZE
     for _ in range(FRAME_SIZE - 2):
-        processor.process_data("1000,0.05,0.0\n")
+        processor.process_data({"photodiode_value": 1000, "ay": 0.05, "gz": 0.0})
 
     frame = await queue.get()
     assert isinstance(frame, pd.DataFrame), "Queued frame should be DataFrame"
-    assert len(frame) == FRAME_SIZE, "Frame should have 1000 rows"
-    assert len(processor.buffer) == 0, "Buffer should be empty after queuing"
+    assert len(frame) == FRAME_SIZE, f"Frame should have {FRAME_SIZE} rows, got {len(frame)}"
+    assert len(processor.buffer) == 0, f"Buffer should be empty after queuing, got {len(processor.buffer)}"
     print("DataProcessor test passed.")
 
 # ------------------------
@@ -91,19 +89,25 @@ def test_baseline_hmm():
     print(f"Alert vector predicted as: {state_alert}")
     print(f"Drowsy vector predicted as: {state_drowsy}")
     print("Baseline + HMM test passed.")
-
 # ------------------------
 # Integration test: full pipeline
 # ------------------------
+@pytest.mark.asyncio
 async def test_integration():
     print("Testing full pipeline integration...")
     queue = asyncio.Queue()
     processor = DataProcessor(queue)
     extractor = FeatureExtractor(sample_rate=SAMPLE_RATE, blink_threshold=BLINK_THRESHOLD, nod_threshold=NOD_THRESHOLD)
 
-    # Simulate drowsy-like BLE input
-    for _ in range(FRAME_SIZE):
-        processor.process_data("photodiode_value,ay,gz\n950,0.1,0.0\n")
+    # ✅ FIX: Simulate drowsy-like BLE input with dicts (matches production)
+    for i in range(FRAME_SIZE):
+        # Simulate blinks every 100 samples
+        ir_value = 100 if (i % 100 < 15) else 950
+        processor.process_data({
+            "photodiode_value": ir_value,
+            "ay": 0.1,
+            "gz": 0.5 if (i % 50 < 10) else 0.0  # Simulate nods
+        })
 
     frame = await queue.get()
 
@@ -116,7 +120,7 @@ async def test_integration():
     baseline = load_baseline()
     alert_model, drowsy_model = load_models()
 
-    # Compare with baseline (simple deviation check)
+    # Compare with baseline
     deviations = {}
     if blink_duration > baseline["avg_blink_duration_ms"]:
         deviations["blink"] = blink_duration
@@ -132,6 +136,11 @@ async def test_integration():
     print(f"Extracted features: Blink {blink_duration:.2f} ms, Nod {nod_freq:.2f} Hz, Accel {avg_accel:.2f}")
     print(f"Deviations from baseline: {deviations}")
     print(f"HMM predicted state: {state}")
+    
+    # ✅ Add assertions to verify features were extracted
+    assert blink_duration > 0, "Integration test should detect blinks"
+    assert nod_freq > 0, "Integration test should detect nods"
+    
     print("Integration test passed.")
 
 # ------------------------

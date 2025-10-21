@@ -1,28 +1,59 @@
 import pandas as pd
 import numpy as np
 import itertools
+import logging
 from scipy.signal import find_peaks
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class FeatureExtractor:
     """
     Extracts key features from a pandas DataFrame of time-series sensor data.
+    
+    Expected columns:
+    - photodiode_value: IR photodiode reading in mV (0-3300 range)
+    - ay: Accelerometer Y-axis in g
+    - gz: Gyroscope Z-axis in °/s
+    
+    If 'ir' column exists (from raw BLE), it will be treated as photodiode_value.
     """
-    def __init__(self, sample_rate=100, blink_threshold=1000, nod_threshold=1.1):
+    def __init__(self, sample_rate=10, blink_threshold=250, nod_threshold=0.5):
+        """
+        Args:
+            sample_rate: Sampling rate in Hz (ACTUAL rate from device, ~10 Hz for ESP32 with 100ms delay)
+            blink_threshold: Threshold in mV for photodiode blink detection (normal ~300-500 mV, blink ~50-200 mV)
+            nod_threshold: Threshold in g for gyroscope peak detection during nodding
+        """
         self.sample_rate = sample_rate
         self.blink_threshold = blink_threshold
         self.nod_threshold = nod_threshold
+        logger.info(f"FeatureExtractor initialized: sample_rate={sample_rate} Hz, blink_threshold={blink_threshold} mV, nod_threshold={nod_threshold} g")
 
     def getBlinkScalar(self, data: pd.DataFrame) -> float:
         """
         Calculates the average blink duration within a time window.
+        Uses photodiode_value (IR reading in mV).
+        
+        Blink detection: photodiode_value < threshold (eye closes → IR drops)
         Returns the average duration in milliseconds.
         """
-        if data.empty or 'photodiode_value' not in data.columns:
+        if data.empty:
+            return 0.0
+        
+        # Handle both 'photodiode_value' and 'ir' column names
+        ir_column = None
+        if 'photodiode_value' in data.columns:
+            ir_column = 'photodiode_value'
+        elif 'ir' in data.columns:
+            ir_column = 'ir'
+        else:
+            logger.warning("Neither 'photodiode_value' nor 'ir' column found in data")
             return 0.0
 
         # Create a boolean series where True indicates the value is below the blink threshold
         # This captures both short blinks and sustained eye closures.
-        is_blinking = data['photodiode_value'] < self.blink_threshold
+        is_blinking = data[ir_column] < self.blink_threshold
         blink_durations = []
 
         # Use groupby to find consecutive blocks of True values (blinks)
@@ -36,7 +67,9 @@ class FeatureExtractor:
         if not blink_durations:
             return 0.0
         
-        return float(np.mean(blink_durations))
+        avg_blink = float(np.mean(blink_durations))
+        logger.debug(f"Blink extraction: found {len(blink_durations)} blinks, avg duration {avg_blink:.1f} ms")
+        return avg_blink
         
 
     def getNodFreqScalar(self, data: pd.DataFrame) -> float:
