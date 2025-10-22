@@ -2,6 +2,7 @@ import asyncio
 import time
 import logging
 from pathlib import Path
+import random 
 from .data_cleansing.data_processor import DataProcessor
 from .bluetooth.ble_handler import BLEHandler
 from .feature_extraction.feature_vector import FeatureExtractor
@@ -38,12 +39,16 @@ async def main():
     alert_model, drowsy_model = load_models()
 
     start_time = time.time()
+    
+    # FIX 2: Generate Session ID in the service
+    session_id = f"IRIS{random.randint(1000, 9999)}"
 
     # State dict for dashboard
     state = {
         "connected": False,
         "duration": 0.0,
         "status": "Unknown",
+        "session_id": session_id, # Included in state
         "metrics": {"avg_accel": 0.0, "blink_duration": 0.0, "nod_freq": 0.0}
     }
 
@@ -97,16 +102,17 @@ async def main():
                 "connected": handler.client.is_connected if handler.client else False,
                 "duration": round(time.time() - start_time, 1),
                 "status": driver_status,
+                "session_id": session_id,
                 "metrics": {"avg_accel": avg_accel, "blink_duration": blink_duration, "nod_freq": nod_freq}
             })
 
             logger.info(f"State: {state}")
 
-            queue.task_done()
+            queue.task_done() # Line 48 is now correctly the end of the while loop
 
-    except asyncio.CancelledError:
+    except asyncio.CancelledError: # This must align with 'try'
         logger.info("Controller cancelled.")
-    finally:
+    finally: # This must align with 'try'
         await handler.stop()
         broadcast_task.cancel()
         ws_task.cancel()
