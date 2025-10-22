@@ -50,8 +50,8 @@ async def main():
     # Start BLE listener
     bluetooth_task = asyncio.create_task(handler.connect_and_subscribe())
 
-    # Start WebSocket server
-    ws_server = WebSocketServer()
+    # Start WebSocket server (Using 0.0.0.0 for broader network compatibility)
+    ws_server = WebSocketServer(host="0.0.0.0") 
     ws_task = asyncio.create_task(ws_server.start())
 
     # Periodically broadcast state to dashboards
